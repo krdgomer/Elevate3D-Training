@@ -1,0 +1,14 @@
+data
+elevate3d.egg-info
+__pycache__
+.idea
+src/rgb2dsm/evaluation/images
+disc.pth.tar
+gen.pth.tar
+datasets
+predictions
+test_results
+results.txt
+test_images
+maskrcnn_weights.pth
+releases
