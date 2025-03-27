@@ -1,10 +1,10 @@
 import argparse
 import torch
 import os
-from src.BATC.model import get_model
+from maskrcnn.model import get_model
 import src.configs.maskrcnn_config as cfg
 import numpy as np
-from src.BATC.training.dataset import MaskRCNNDataset, custom_collate
+from dataset import MaskRCNNDataset, custom_collate
 import torch.optim as optim
 from tqdm import tqdm
 

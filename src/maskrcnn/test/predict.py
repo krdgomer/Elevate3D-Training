@@ -7,7 +7,7 @@ import torchvision.transforms as T
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from src.BATC.model import get_model
+from maskrcnn.model import get_model
 
 if __name__ == "__main__":
     # Load the trained model
