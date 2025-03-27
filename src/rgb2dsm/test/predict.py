@@ -3,7 +3,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
-from src.rgb2dsm.training.generator import Generator
+from rgb2dsm.generator import Generator
 import os
 
 
