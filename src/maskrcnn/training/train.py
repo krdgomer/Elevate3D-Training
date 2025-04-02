@@ -11,16 +11,28 @@ from tqdm import tqdm
 # Argument parser
 parser = argparse.ArgumentParser(description="Training Configuration")
 parser.add_argument(
-    "--images_path",
+    "--train_images_path",
     type=str,
     required=True,
-    help="Path to the images directory",
+    help="Path to the training images directory",
 )
 parser.add_argument(
-    "--masks_path",
+    "--train_masks_path",
     type=str,
     required=True,
-    help="Path to the masks directory",
+    help="Path to the training masks directory",
+)
+parser.add_argument(
+    "--val_images_path",
+    type=str,
+    required=True,
+    help="Path to the validation images directory",
+)
+parser.add_argument(
+    "--val_masks_path",
+    type=str,
+    required=True,
+    help="Path to the validation masks directory",
 )
 parser.add_argument(
     "--save_path",
@@ -30,37 +42,38 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-IMAGES_PATH = args.images_path
-MASKS_PATH = args.masks_path
+TRAIN_IMAGES_PATH = args.train_images_path
+TRAIN_MASKS_PATH = args.train_masks_path
+VAL_IMAGES_PATH = args.val_images_path
+VAL_MASKS_PATH = args.val_masks_path
 SAVE_PATH = args.save_path
 
 def train():
-    print("Loading dataset...")
-    images = sorted(os.listdir(IMAGES_PATH))
-    masks = sorted(os.listdir(MASKS_PATH))
+    print("Loading training dataset...")
+    train_images = sorted(os.listdir(TRAIN_IMAGES_PATH))
+    train_masks = sorted(os.listdir(TRAIN_MASKS_PATH))
 
-    num = int(0.9 * len(images))
-    num = num if num % 2 == 0 else num + 1
-    train_imgs_inds = np.random.choice(range(len(images)), num, replace=False)
-    val_imgs_inds = np.setdiff1d(range(len(images)), train_imgs_inds)
-    train_imgs = np.array(images)[train_imgs_inds]
-    val_imgs = np.array(images)[val_imgs_inds]
-    train_masks = np.array(masks)[train_imgs_inds]
-    val_masks = np.array(masks)[val_imgs_inds]
+    print("Loading validation dataset...")
+    val_images = sorted(os.listdir(VAL_IMAGES_PATH))
+    val_masks = sorted(os.listdir(VAL_MASKS_PATH))
 
     print("Creating dataloaders...")
-    train_dl = torch.utils.data.DataLoader(MaskRCNNDataset(train_imgs, train_masks, IMAGES_PATH, MASKS_PATH),
-                                           batch_size=cfg.BATCH_SIZE,
-                                           shuffle=True,
-                                           collate_fn=custom_collate,
-                                           num_workers=cfg.NUM_WORKERS,
-                                           pin_memory=True if torch.cuda.is_available() else False)
-    val_dl = torch.utils.data.DataLoader(MaskRCNNDataset(val_imgs, val_masks, IMAGES_PATH, MASKS_PATH),
-                                         batch_size=cfg.BATCH_SIZE,
-                                         shuffle=False,
-                                         collate_fn=custom_collate,
-                                         num_workers=cfg.NUM_WORKERS,
-                                         pin_memory=True if torch.cuda.is_available() else False)
+    train_dl = torch.utils.data.DataLoader(
+        MaskRCNNDataset(train_images, train_masks, TRAIN_IMAGES_PATH, TRAIN_MASKS_PATH),
+        batch_size=cfg.BATCH_SIZE,
+        shuffle=True,
+        collate_fn=custom_collate,
+        num_workers=cfg.NUM_WORKERS,
+        pin_memory=True if torch.cuda.is_available() else False,
+    )
+    val_dl = torch.utils.data.DataLoader(
+        MaskRCNNDataset(val_images, val_masks, VAL_IMAGES_PATH, VAL_MASKS_PATH),
+        batch_size=cfg.BATCH_SIZE,
+        shuffle=False,
+        collate_fn=custom_collate,
+        num_workers=cfg.NUM_WORKERS,
+        pin_memory=True if torch.cuda.is_available() else False,
+    )
 
     print("Initializing model...")
     model = get_model().to(cfg.DEVICE)
