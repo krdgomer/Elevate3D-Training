@@ -1,7 +1,7 @@
 import argparse
 import torch
 import os
-from maskrcnn.model import get_model
+from src.maskrcnn.model import get_model
 import src.configs.maskrcnn_config as cfg
 import numpy as np
 from dataset import MaskRCNNDataset, custom_collate
