@@ -4,7 +4,7 @@ import os
 from src.maskrcnn.model import get_model
 import src.configs.maskrcnn_config as cfg
 import numpy as np
-from dataset import MaskRCNNDataset, custom_collate
+from src.maskrcnn.training.dataset import MaskRCNNDataset, custom_collate
 import torch.optim as optim
 from tqdm import tqdm
 
