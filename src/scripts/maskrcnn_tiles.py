@@ -3,10 +3,10 @@ from PIL import Image
 import numpy as np
 
 # Folder paths
-rgb_input_folder = 'data/processed/maskrcnn/rgb'  # Folder containing RGB images
-gti_input_folder = 'data/processed/maskrcnn/gti'  # Folder containing GTI images
-rgb_output_folder = 'data/processed/maskrcnn/rgb_tiles'  # Folder to save RGB tiles
-gti_output_folder = 'data/processed/maskrcnn/gti_tiles'  # Folder to save GTI tiles
+rgb_input_folder = 'data/processed/maskrcnn/inria/rgb'  # Folder containing RGB images
+gti_input_folder = 'data/processed/maskrcnn/inria/gti'  # Folder containing GTI images
+rgb_output_folder = 'data/processed/maskrcnn/inria/rgb_tiles'  # Folder to save RGB tiles
+gti_output_folder = 'data/processed/maskrcnn/inria/gti_tiles'  # Folder to save GTI tiles
 
 # Create output folders if they don't exist
 os.makedirs(rgb_output_folder, exist_ok=True)
@@ -30,7 +30,7 @@ for rgb_file, gti_file in zip(rgb_files, gti_files):
     gti_image = Image.open(gti_path)
 
     # Check if both images are 2048x2048
-    if rgb_image.size == (2048, 2048) and gti_image.size == (2048, 2048):
+    if rgb_image.size == (5000, 5000) and gti_image.size == (5000, 5000):
         # Define tile size (512x512)
         tile_size = 512
 
@@ -49,10 +49,11 @@ for rgb_file, gti_file in zip(rgb_files, gti_files):
                 # Convert the RGB tile to a numpy array
                 rgb_tile_array = np.array(rgb_tile)
 
+                """
                 # Check if the RGB tile contains any blank (black) pixels
                 if np.any(np.all(rgb_tile_array == 0, axis=-1)):  # Check for pure black pixels
                     print(f"Skipping tile {i * 4 + j + 1} in {rgb_file}: RGB tile contains blank pixels")
-                    continue  # Skip this tile
+                    continue  # Skip this tile"""
 
                 # Crop the GTI tile
                 gti_tile = gti_image.crop((left, upper, right, lower))
@@ -66,7 +67,7 @@ for rgb_file, gti_file in zip(rgb_files, gti_files):
                     continue  # Skip this tile
 
                 # Create the new filenames
-                base_name = rgb_file.replace('_RGB.png', '')  # Remove suffix
+                base_name = rgb_file.replace('.png', '')  # Remove suffix
                 tile_id = i * 4 + j + 1  # Tile number (1 to 16)
                 rgb_tile_filename = f"{base_name}_RGB_tile_{tile_id}.png"
                 gti_tile_filename = f"{base_name}_GTI_tile_{tile_id}.png"

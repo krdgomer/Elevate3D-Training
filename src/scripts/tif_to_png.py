@@ -4,18 +4,18 @@ from PIL import Image
 import numpy as np
 
 # Define the input and output folders
-rgb_input_folder = "data/raw/rgb_tif"
-gti_input_folder = "data/raw/gti_tif"
-rgb_output_folder = "data/processed/maskrcnn/rgb"
-gti_output_folder = "data/processed/maskrcnn/gti"
+rgb_input_folder = "data/raw/inria/images"
+gti_input_folder = "data/raw/inria/gt"
+rgb_output_folder = "data/processed/maskrcnn/inria/rgb"
+gti_output_folder = "data/processed/maskrcnn/inria/gt"
 
 # Create the output folders if they don't exist
 os.makedirs(rgb_output_folder, exist_ok=True)
 os.makedirs(gti_output_folder, exist_ok=True)
 
 # Get a list of all files in the input folders
-rgb_files = sorted([f for f in os.listdir(rgb_input_folder) if f.endswith("_RGB.tif")])
-gti_files = sorted([f for f in os.listdir(gti_input_folder) if f.endswith("_GTI.tif")])
+rgb_files = sorted([f for f in os.listdir(rgb_input_folder) if f.endswith(".tif")])
+gti_files = sorted([f for f in os.listdir(gti_input_folder) if f.endswith(".tif")])
 
 # Ensure the files are paired correctly
 assert len(rgb_files) == len(gti_files), "Mismatch between RGB and GTI files!"
@@ -23,7 +23,7 @@ assert len(rgb_files) == len(gti_files), "Mismatch between RGB and GTI files!"
 # Process each pair of RGB and GTI files
 for rgb_file, gti_file in zip(rgb_files, gti_files):
     # Extract the base title_id
-    title_id = rgb_file.replace("_RGB.tif", "")
+    title_id = rgb_file.replace(".tif", "")
 
     # Read the RGB image
     rgb_path = os.path.join(rgb_input_folder, rgb_file)
