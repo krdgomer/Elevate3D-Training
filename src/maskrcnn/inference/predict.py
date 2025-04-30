@@ -1,8 +1,5 @@
 import cv2
 import numpy as np
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 import torch
 from torchvision.transforms import functional as F
 from src.maskrcnn.inference.post_process import post_process
@@ -22,7 +19,6 @@ def predict_mask(model,image_path,device="cpu",threshold=0.5):
         tuple: A tuple containing the predicted masks and their corresponding scores.
     
     """
-    model.eval()
 
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
