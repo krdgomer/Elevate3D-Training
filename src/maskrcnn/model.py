@@ -1,6 +1,7 @@
 from torchvision.models.detection import MaskRCNN
 from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor, FastRCNNPredictor
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 def get_model():
     # Load ResNet-101 backbone with FPN
