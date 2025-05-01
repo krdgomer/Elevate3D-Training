@@ -81,7 +81,7 @@ def train():
 
     all_train_losses = []
     all_val_losses = []
-    flag = False
+    best_val_loss = float('inf')  # Initialize with a very high value
 
     for epoch in range(cfg.NUM_EPOCHS):
         print(f"Starting epoch {epoch+1}/{cfg.NUM_EPOCHS}...")
@@ -101,20 +101,18 @@ def train():
 
             train_epoch_loss += losses.item()
 
-            losses = sum(loss for loss in loss_dict.values())
-            train_epoch_loss += losses.item()
-
             optimizer.zero_grad()
             losses.backward()
             optimizer.step()
 
             train_pbar.set_postfix(loss=train_epoch_loss / len(train_dl))
 
-        all_train_losses.append(train_epoch_loss)
-        print(f"Epoch {epoch+1}/{cfg.NUM_EPOCHS} - Train Loss: {train_epoch_loss:.4f}")
+        all_train_losses.append(train_epoch_loss / len(train_dl))
+        print(f"Epoch {epoch+1}/{cfg.NUM_EPOCHS} - Train Loss: {train_epoch_loss / len(train_dl):.4f}")
 
         # Validation loop
         print("Starting validation...")
+        model.eval()
         with torch.no_grad():
             val_pbar = tqdm(val_dl, total=len(val_dl), desc=f"Epoch {epoch+1}/{cfg.NUM_EPOCHS} - Validation")
             for imgs, targets in val_pbar:
@@ -126,13 +124,23 @@ def train():
                 val_epoch_loss += losses.item()
                 val_pbar.set_postfix(loss=val_epoch_loss / len(val_dl))
 
-        all_val_losses.append(val_epoch_loss)
-        print(f"Epoch {epoch+1}/{cfg.NUM_EPOCHS} - Validation Loss: {val_epoch_loss:.4f}")
+        current_val_loss = val_epoch_loss / len(val_dl)
+        all_val_losses.append(current_val_loss)
+        print(f"Epoch {epoch+1}/{cfg.NUM_EPOCHS} - Validation Loss: {current_val_loss:.4f}")
 
+        # Save the model if it has the best validation loss so far
+        if current_val_loss < best_val_loss:
+            best_val_loss = current_val_loss
+            if cfg.SAVE_MODEL:
+                print(f"New best validation loss: {best_val_loss:.4f}. Saving model...")
+                torch.save(model.state_dict(), os.path.join(SAVE_PATH, "maskrcnn_best_weights.pth"))
+                print("Model saved successfully.")
+
+    # Save the final model
     if cfg.SAVE_MODEL:
-        print("Saving model...")
-        torch.save(model.state_dict(), os.path.join(SAVE_PATH, "maskrcnn_weights.pth"))
-        print("Model saved successfully.")
+        print("Saving final model...")
+        torch.save(model.state_dict(), os.path.join(SAVE_PATH, "maskrcnn_final_weights.pth"))
+        print("Final model saved successfully.")
 
 if __name__ == "__main__":
     print("Starting training process...")
