@@ -13,7 +13,7 @@ import torch
 
 rgb_dir = "data/processed/maskrcnn/test-train-val-split/test/rgb"
 gt_dir = "data/processed/maskrcnn/test-train-val-split/test/gti"
-weights_path = "src/maskrcnn/models/v0.1/maskrcnn_weights.pth"
+weights_path = "src/maskrcnn/models/v0.3/maskrcnn_weights.pth"
 
 model = get_model()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
