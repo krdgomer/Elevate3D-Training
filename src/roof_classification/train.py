@@ -255,7 +255,7 @@ def check_class_distribution(loader, class_names):
 # Main execution
 if __name__ == "__main__":
     # Set your data directory path here
-    data_dir = "data/raw/roof"  # Update this path
+    data_dir = "/content/drive/MyDrive/ProjeDosyalari/roof/"  # Update this path
     
     # Hyperparameters
     batch_size = 16
