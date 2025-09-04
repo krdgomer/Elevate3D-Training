@@ -162,7 +162,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
     no_improve = 0
     
     # Learning rate scheduler
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5, verbose=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
     
     for epoch in range(num_epochs):
         # Training phase
