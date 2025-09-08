@@ -1,0 +1,32 @@
+Results of Error Calculation (v0.1)
+============================
+
+Mean Squared Error (MSE) for the entire folder: 1146.6890
+
+Average MSE per 16-bit chunk:
+Chunk 0-16: 859.7863
+Chunk 16-32: 847.8155
+Chunk 32-48: 938.2936
+Chunk 48-64: 1115.0968
+Chunk 64-80: 1300.9911
+Chunk 80-96: 1501.7984
+Chunk 96-112: 1671.8614
+Chunk 112-128: 1953.2587
+Chunk 128-144: 2263.8925
+Chunk 144-160: 2616.0942
+Chunk 160-176: 3090.8292
+Chunk 176-192: 2179.5369
+Chunk 192-208: 1953.4822
+Chunk 208-224: 2240.9478
+Chunk 224-240: 2283.1291
+Chunk 240-256: 1516.3617
+
+Error Distribution for the entire folder:
+0-5: 24526515 pixels
+5-10: 6307091 pixels
+10-20: 8864395 pixels
+20-30: 5680509 pixels
+30-50: 6431145 pixels
+50-100: 5170817 pixels
+100-150: 1343913 pixels
+150-255: 415062 pixels
