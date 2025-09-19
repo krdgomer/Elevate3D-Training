@@ -30,13 +30,25 @@ class SatelliteDepthDataset(Dataset):
         self.dsm_mean, self.dsm_std = self._calculate_dsm_stats() if normalize_dsm else (0, 1)
         
     def _calculate_dsm_stats(self):
+        from tqdm import tqdm  # Import inside the function if needed
         all_dsm_values = []
-        for num in self.matching_numbers:
-            dsm_path = os.path.join(self.dsm_dir, f"dsm_{num}.png")  # Use DSM filename
-            dsm_image = Image.open(dsm_path)
-            dsm_data = np.array(dsm_image, dtype=np.float32)
-            valid_data = dsm_data[dsm_data > 0]  # Filter invalid values (e.g., 0 or negative)
-            all_dsm_values.extend(valid_data.flatten())
+        
+        # Use tqdm to show progress and prevent timeout
+        print("Calculating DSM statistics (this prevents Colab timeout)...")
+        for num in tqdm(self.matching_numbers, desc="Processing DSM files"):
+            try:
+                dsm_path = os.path.join(self.dsm_dir, f"dsm_{num}.png")
+                dsm_image = Image.open(dsm_path)
+                dsm_data = np.array(dsm_image, dtype=np.float32)
+                valid_data = dsm_data[dsm_data > 0]  # Filter invalid values
+                all_dsm_values.extend(valid_data.flatten())
+            except Exception as e:
+                print(f"Error processing file {dsm_path}: {e}")
+                continue
+        
+        if not all_dsm_values:
+            raise ValueError("No valid DSM data found to calculate statistics.")
+            
         return np.mean(all_dsm_values), np.std(all_dsm_values)
     
     def __len__(self):
