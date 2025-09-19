@@ -8,7 +8,7 @@ from tqdm import tqdm
 import os
 
 from src.depth_estimation.config import cfg
-from src.depth_estimation.dataset import SatelliteDepthDatasetWithCache
+from src.depth_estimation.dataset import SatelliteDepthDataset
 from src.depth_estimation.model import setup_model, setup_optimizer
 
 def save_checkpoint(state, filename="checkpoint.pth"):
@@ -171,7 +171,7 @@ def main():
     print("Setting up datasets for 8-bit PNG files (512x512 -> 384x384)...")
     
     # Setup datasets with caching to avoid recomputing stats
-    train_dataset = SatelliteDepthDatasetWithCache(
+    train_dataset = SatelliteDepthDataset(
         rgb_dir=cfg.RGB_DIR, 
         dsm_dir=cfg.DSM_DIR,
         stats_cache_file=os.path.join(cfg.OUTPUT_DIR, "train_dsm_stats.npz"),
@@ -179,7 +179,7 @@ def main():
         resize_to_model_input=True  # This handles 512x512 -> 384x384 resize
     )
     
-    val_dataset = SatelliteDepthDatasetWithCache(
+    val_dataset = SatelliteDepthDataset(
         rgb_dir=cfg.VAL_RGB_DIR, 
         dsm_dir=cfg.VAL_DSM_DIR,
         stats_cache_file=os.path.join(cfg.OUTPUT_DIR, "val_dsm_stats.npz"),
