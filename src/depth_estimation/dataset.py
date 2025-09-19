@@ -17,7 +17,16 @@ class SatelliteDepthDataset(Dataset):
         self.dsm_dir = dsm_dir
         self.transform = transform
         
-        self.filenames = [f for f in os.listdir(rgb_dir) if f.endswith(('.tif', '.png', '.jpg'))]
+        # Get matching filenames based on numbers
+        rgb_files = [f for f in os.listdir(rgb_dir) if f.startswith("rgb_") and f.endswith(".png")]
+        dsm_files = [f for f in os.listdir(dsm_dir) if f.startswith("dsm_") and f.endswith(".png")]
+        
+        rgb_numbers = set(f.split("_")[1].split(".")[0] for f in rgb_files)
+        dsm_numbers = set(f.split("_")[1].split(".")[0] for f in dsm_files)
+        
+        # Find matching numbers
+        matching_numbers = rgb_numbers.intersection(dsm_numbers)
+        self.filenames = [f"rgb_{num}.png" for num in matching_numbers]
         
         self.dsm_mean, self.dsm_std = self._calculate_dsm_stats() if normalize_dsm else (0, 1)
         
