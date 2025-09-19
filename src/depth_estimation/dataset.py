@@ -6,7 +6,7 @@ from transformers import DPTImageProcessor
 from PIL import Image
 import numpy as np
 import os
-from config import cfg
+from src.depth_estimation.config import cfg
 from torchvision import transforms
 
 processor = DPTImageProcessor.from_pretrained(cfg.PRETRAINED_MODEL_NAME)

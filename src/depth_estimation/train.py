@@ -6,7 +6,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
 import os
 
-from config import cfg
+from src.depth_estimation.config import cfg
 from dataset import SatelliteDepthDataset
 from model import setup_model, setup_optimizer
 from utils import save_checkpoint  # We'll create this next
