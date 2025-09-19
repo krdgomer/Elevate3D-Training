@@ -211,7 +211,7 @@ def main():
     # Setup model and training components
     model = setup_model()
     optimizer = setup_optimizer(model)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
     criterion = torch.nn.HuberLoss(delta=0.5)
     
     print(f"Model device: {next(model.parameters()).device}")
