@@ -174,7 +174,6 @@ def main():
     train_dataset = SatelliteDepthDataset(
         rgb_dir=cfg.RGB_DIR, 
         dsm_dir=cfg.DSM_DIR,
-        stats_cache_file=os.path.join(cfg.OUTPUT_DIR, "train_dsm_stats.npz"),
         batch_size_for_stats=50,
         resize_to_model_input=True  # This handles 512x512 -> 384x384 resize
     )
@@ -182,7 +181,6 @@ def main():
     val_dataset = SatelliteDepthDataset(
         rgb_dir=cfg.VAL_RGB_DIR, 
         dsm_dir=cfg.VAL_DSM_DIR,
-        stats_cache_file=os.path.join(cfg.OUTPUT_DIR, "val_dsm_stats.npz"),
         batch_size_for_stats=50,
         resize_to_model_input=True
     )
