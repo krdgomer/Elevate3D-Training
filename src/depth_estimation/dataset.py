@@ -25,15 +25,14 @@ class SatelliteDepthDataset(Dataset):
         dsm_numbers = set(f.split("_")[1].split(".")[0] for f in dsm_files)
         
         # Find matching numbers
-        matching_numbers = rgb_numbers.intersection(dsm_numbers)
-        self.filenames = [f"rgb_{num}.png" for num in matching_numbers]
+        self.matching_numbers = sorted(rgb_numbers.intersection(dsm_numbers))
         
         self.dsm_mean, self.dsm_std = self._calculate_dsm_stats() if normalize_dsm else (0, 1)
         
     def _calculate_dsm_stats(self):
         all_dsm_values = []
-        for fname in self.filenames:
-            dsm_path = os.path.join(self.dsm_dir, fname)
+        for num in self.matching_numbers:
+            dsm_path = os.path.join(self.dsm_dir, f"dsm_{num}.png")  # Use DSM filename
             dsm_image = Image.open(dsm_path)
             dsm_data = np.array(dsm_image, dtype=np.float32)
             valid_data = dsm_data[dsm_data > 0]  # Filter invalid values (e.g., 0 or negative)
@@ -41,12 +40,12 @@ class SatelliteDepthDataset(Dataset):
         return np.mean(all_dsm_values), np.std(all_dsm_values)
     
     def __len__(self):
-        return len(self.filenames)
+        return len(self.matching_numbers)
     
     def __getitem__(self, idx):
-        fname = self.filenames[idx]
-        rgb_path = os.path.join(self.rgb_dir, fname)
-        dsm_path = os.path.join(self.dsm_dir, fname)
+        num = self.matching_numbers[idx]
+        rgb_path = os.path.join(self.rgb_dir, f"rgb_{num}.png")
+        dsm_path = os.path.join(self.dsm_dir, f"dsm_{num}.png")
         
         # Load and transform RGB
         rgb_image = Image.open(rgb_path).convert('RGB')
