@@ -7,9 +7,14 @@ from tqdm import tqdm
 import os
 
 from src.depth_estimation.config import cfg
-from dataset import SatelliteDepthDataset
-from model import setup_model, setup_optimizer
-from utils import save_checkpoint  # We'll create this next
+from src.depth_estimation.dataset import SatelliteDepthDataset
+from src.depth_estimation.model import setup_model, setup_optimizer
+
+def save_checkpoint(state, filename="checkpoint.pth"):
+    """Save training checkpoint."""
+    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+    path = os.path.join(cfg.OUTPUT_DIR, filename)
+    torch.save(state, path)
 
 def train_epoch(model, train_loader, criterion, optimizer, device):
     model.train()

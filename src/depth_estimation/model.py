@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from transformers import DPTForDepthEstimation
 from torch.optim import AdamW
-from config import cfg
+from src.depth_estimation.config import cfg
 import os
 
 def setup_model(device=cfg.DEVICE):
