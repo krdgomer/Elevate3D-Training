@@ -8,8 +8,8 @@ from model import build_model
 import os
 
 # Paths
-train_dir = "data/train"
-val_dir   = "data/val"
+train_dir = "/content/drive/MyDrive/ProjeDosyalari/roof/train"
+val_dir   = "/content/drive/MyDrive/ProjeDosyalari/roof/val"
 
 batch_size = 32
 epochs = 20
