@@ -2,7 +2,7 @@ import argparse
 import torch
 import os
 from src.building_segmentation.model import get_model
-import src.configs.maskrcnn_config as cfg
+import src.building_segmentation.config as cfg
 import numpy as np
 from src.building_segmentation.training.dataset import MaskRCNNDataset, custom_collate
 import torch.optim as optim
