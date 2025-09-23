@@ -1,26 +1,7 @@
-import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-from torchvision import transforms
-import torch
-from tqdm import tqdm
-from src.building_segmentation.inference.predict import predict_mask
-from src.building_segmentation.model import get_model
+from PIL import Image, ImageDraw
 
-# Paths
-rgb_dir = "data/processed/maskrcnn/test-train-val-split/test/rgb"
-gt_dir = "data/processed/maskrcnn/test-train-val-split/test/gti"
-output_dir = "src/maskrcnn/models/v0.2/visualizations"
-os.makedirs(output_dir, exist_ok=True)
-
-# Model setup
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = get_model()
-model.load_state_dict(torch.load("src/maskrcnn/models/v0.2/maskrcnn_weights.pth", map_location=device))
-model.to(device)
-model.eval()
 
 # Helper: overlay masks on image
 def overlay_masks(base_image, masks, color=(255, 0, 0), scores=None):
@@ -39,20 +20,9 @@ def overlay_masks(base_image, masks, color=(255, 0, 0), scores=None):
 
     return Image.alpha_composite(img, overlay).convert("RGB")
 
-# Process each image
-image_filenames = sorted([f for f in os.listdir(rgb_dir) if f.endswith(".png")])
-for filename in tqdm(image_filenames):
-    image_path = os.path.join(rgb_dir, filename)
-    gt_path = os.path.join(gt_dir, filename.replace("_rgb", "_gti"))
-
-    image = Image.open(image_path).convert("RGB")
-    gt_mask = np.array(Image.open(gt_path))
-
+def visualize_prediction(image, gt_mask, pred_masks, pred_scores, output_dir, filename):
     # Ground truth instance masks
     gt_instances = [(gt_mask == id).astype(np.uint8) for id in np.unique(gt_mask) if id != 0]
-
-    # Prediction
-    pred_masks, pred_scores, _ = predict_mask(model, image_path, device=device, threshold=0.5)
 
     # Overlays
     img_gt = overlay_masks(image, gt_instances, color=(0, 255, 0))
