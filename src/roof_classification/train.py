@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from dataset import RoofDataset, train_transform, test_transform
-from model import build_model
+from src.roof_classification.dataset import RoofDataset, train_transform, test_transform
+from src.roof_classification.model import build_model
 
 import os
 

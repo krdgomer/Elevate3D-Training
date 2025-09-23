@@ -1,8 +1,8 @@
 import torch
 from torch.utils.data import DataLoader
 from sklearn.metrics import classification_report
-from dataset import RoofDataset, test_transform
-from model import build_model
+from src.roof_classification.dataset import RoofDataset, test_transform
+from src.roof_classification.model import build_model
 
 # Paths
 test_dir = "data/test"
