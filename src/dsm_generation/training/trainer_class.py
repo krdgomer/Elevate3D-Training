@@ -2,14 +2,14 @@ import torch
 from src.utils.utils import save_checkpoint, load_checkpoint, save_some_examples
 import torch.nn as nn
 import torch.optim as optim
-from rgb2dsm.dataset import MapDataset
-from rgb2dsm.generator import Generator
-from rgb2dsm.discriminator import Discriminator
+from src.dsm_generation.dataset import MapDataset
+from src.dsm_generation.generator import Generator
+from src.dsm_generation.discriminator import Discriminator
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from src.configs import rgb2dsm_config as cfg
+from src.dsm_generation import config as cfg
 import matplotlib.pyplot as plt
-from loss_function import ElevationLoss
+from src.dsm_generation.training.loss_function import ElevationLoss
 
 
 class Pix2PixTrainer:

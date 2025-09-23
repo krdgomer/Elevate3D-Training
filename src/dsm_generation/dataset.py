@@ -1,5 +1,5 @@
 import numpy as np
-from src.configs import rgb2dsm_config as config
+from src.dsm_generation import config as cfg
 import os
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
@@ -41,11 +41,11 @@ class MapDataset(Dataset):
             input_image = cv2.equalizeHist(input_image)
 
         # Apply augmentations
-        augmentations = config.both_transform(image=input_image, image0=target_image)
+        augmentations = cfg.both_transform(image=input_image, image0=target_image)
         input_image = augmentations["image"]
         target_image = augmentations["image0"]
 
-        input_image = config.transform_only_input(image=input_image)["image"]
-        target_image = config.transform_only_mask(image=target_image)["image"]
+        input_image = cfg.transform_only_input(image=input_image)["image"]
+        target_image = cfg.transform_only_mask(image=target_image)["image"]
 
         return input_image, target_image

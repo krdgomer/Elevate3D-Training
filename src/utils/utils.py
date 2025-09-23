@@ -1,6 +1,6 @@
 import torch
 from torchvision.utils import save_image
-from src.configs import rgb2dsm_config as config
+from src.dsm_generation import config as config
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import numpy as np
