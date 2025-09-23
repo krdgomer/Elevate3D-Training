@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader,WeightedRandomSampler
 from src.roof_classification.dataset import RoofDataset, train_transform, test_transform
 from src.roof_classification.model import build_model
-
+import numpy as np
 import os
 
 # Paths
@@ -12,26 +12,40 @@ train_dir = "/content/drive/MyDrive/ProjeDosyalari/roof/train"
 val_dir   = "/content/drive/MyDrive/ProjeDosyalari/roof/val"
 
 batch_size = 32
-epochs = 20
+epochs = 25
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Datasets
 train_dataset = RoofDataset(train_dir, transform=train_transform)
 val_dataset   = RoofDataset(val_dir, transform=test_transform)
 
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
+# Class balancing
+labels = [train_dataset.class_to_idx[img.split("_")[0].split("/")[-1]] for img in train_dataset.files]
+class_counts = np.bincount(labels)
+class_weights = 1. / class_counts
+sample_weights = [class_weights[label] for label in labels]
+
+sampler = WeightedRandomSampler(weights=sample_weights, num_samples=len(sample_weights), replacement=True)
+
+train_loader = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler, num_workers=2)
 val_loader   = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
 
 num_classes = len(train_dataset.classes)
 print("Classes:", train_dataset.classes)
 
 # Model
-model = build_model(num_classes, freeze_backbone=True).to(device)
+model = build_model(num_classes).to(device)
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.fc.parameters(), lr=1e-4)
+
+# Dual LR: lower for backbone, higher for head
+params = [
+    {"params": [p for n, p in model.named_parameters() if "layer4" in n], "lr": 1e-5},
+    {"params": model.fc.parameters(), "lr": 1e-4}
+]
+optimizer = optim.Adam(params)
 
 # Training loop
-def train_model(model, train_loader, val_loader, criterion, optimizer, epochs=20):
+def train_model(model, train_loader, val_loader, criterion, optimizer, epochs=25):
     best_acc = 0.0
 
     for epoch in range(epochs):
@@ -66,7 +80,8 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, epochs=20
 
         val_acc = val_corrects.double() / len(val_loader.dataset)
 
-        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {epoch_loss:.4f} | Train Acc: {epoch_acc:.4f} | Val Acc: {val_acc:.4f}")
+        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {epoch_loss:.4f} | "
+              f"Train Acc: {epoch_acc:.4f} | Val Acc: {val_acc:.4f}")
 
         if val_acc > best_acc:
             best_acc = val_acc

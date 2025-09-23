@@ -1,12 +1,14 @@
 import torch.nn as nn
 from torchvision import models
 
-def build_model(num_classes, freeze_backbone=True):
+def build_model(num_classes):
     model = models.resnet50(pretrained=True)
 
-    if freeze_backbone:
-        for param in model.parameters():
-            param.requires_grad = False
+    # Freeze everything except layer4 + fc
+    for name, param in model.named_parameters():
+        param.requires_grad = False
+        if "layer4" in name or "fc" in name:
+            param.requires_grad = True
 
     # Replace classifier head
     model.fc = nn.Sequential(

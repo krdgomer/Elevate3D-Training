@@ -16,7 +16,7 @@ test_loader  = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, nu
 
 # Model
 num_classes = len(test_dataset.classes)
-model = build_model(num_classes, freeze_backbone=True).to(device)
+model = build_model(num_classes).to(device)
 model.load_state_dict(torch.load("best_roof_model.pth"))
 model.eval()
 
