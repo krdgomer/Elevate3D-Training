@@ -1,0 +1,14 @@
+2025-09-21 14:40:46,554 - INFO - Using model weights: D:\dev\projects\Bitirme-Projesi\Elevate3D-Training\src\building_segmentation\weights\v0.4\maskrcnn_weights.pth
+2025-09-21 14:40:46,566 - INFO - RGB images directory: data/processed/maskrcnn/test-train-val-split/test/rgb
+2025-09-21 14:40:46,566 - INFO - Ground truth masks directory: data/processed/maskrcnn/test-train-val-split/test/gti
+2025-09-21 14:40:46,570 - INFO - Visualizations will be saved to: D:\dev\projects\Bitirme-Projesi\Elevate3D-Training\src\building_segmentation\weights\v0.4\visualizations
+2025-09-21 14:40:47,604 - INFO - Found 563 test images
+2025-09-21 16:20:52,754 - INFO - ==================================================
+2025-09-21 16:20:52,757 - INFO - TEST RESULTS SUMMARY
+2025-09-21 16:20:52,757 - INFO - ==================================================
+2025-09-21 16:20:52,757 - INFO - Mean AP@0.50: 0.7021
+2025-09-21 16:20:52,758 - INFO - Mean AP@0.75: 0.3534
+2025-09-21 16:20:52,758 - INFO - Mean AP@[.50:.95]: 0.3784
+2025-09-21 16:20:52,758 - INFO - Log file saved to: D:\dev\projects\Bitirme-Projesi\Elevate3D-Training\src\building_segmentation\weights\v0.4\test_log_20250921_144046.txt
+2025-09-21 16:20:52,758 - INFO - Visualizations saved to: D:\dev\projects\Bitirme-Projesi\Elevate3D-Training\src\building_segmentation\weights\v0.4\visualizations
+2025-09-21 16:20:52,759 - INFO - ==================================================
