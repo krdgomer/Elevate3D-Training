@@ -8,26 +8,22 @@ from src.depth_estimation.config import cfg
 import os
 
 def setup_model(device=cfg.DEVICE):
-    """Initialize the DPT model with proper fine-tuning setup."""
+    """Initialize the DPT model with minimal freezing."""
     model = DPTForDepthEstimation.from_pretrained(cfg.PRETRAINED_MODEL_NAME)
     
-    # More strategic freezing - SIMPLIFIED APPROACH
-    print("Setting up model with strategic freezing...")
+    print("Setting up model with minimal freezing...")
     
-    # Option 1: Freeze only the very early backbone layers, unfreeze everything else
-    for name, param in model.named_parameters():
-        # Freeze only the first few layers of the backbone
-        if "backbone.embeddings" in name or "backbone.encoder.layer.0" in name:
-            param.requires_grad = False
-            print(f"❄️  Frozen: {name}")
-        else:
-            param.requires_grad = True
-            print(f"🔥 Trainable: {name}")
+    # MINIMAL FREEZING: Start by unfreezing everything
+    # This ensures the model can learn from your data
+    for param in model.parameters():
+        param.requires_grad = True
     
-    # Count trainable parameters
+    # Optional: You can add gradual freezing later if needed
+    # For now, let everything be trainable to ensure learning
+    
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"🚀 Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
+    print(f"🚀 All parameters trainable: {trainable_params:,} / {total_params:,} (100%)")
     
     model = model.to(device)
     return model
