@@ -11,19 +11,18 @@ def setup_model(device=cfg.DEVICE):
     """Initialize the DPT model with proper fine-tuning setup."""
     model = DPTForDepthEstimation.from_pretrained(cfg.PRETRAINED_MODEL_NAME)
     
-    # More strategic freezing - unfreeze decoder and head
-    # Freeze only the backbone (encoder) initially
+    # More strategic freezing - SIMPLIFIED APPROACH
+    print("Setting up model with strategic freezing...")
+    
+    # Option 1: Freeze only the very early backbone layers, unfreeze everything else
     for name, param in model.named_parameters():
-        if "backbone" in name and "layer" in name:
-            # Freeze early layers of backbone
-            layer_num = int(name.split("layer")[1].split(".")[0])
-            if layer_num <= 2:  # Freeze first 2 layers of backbone
-                param.requires_grad = False
-            else:
-                param.requires_grad = True
+        # Freeze only the first few layers of the backbone
+        if "backbone.embeddings" in name or "backbone.encoder.layer.0" in name:
+            param.requires_grad = False
+            print(f"❄️  Frozen: {name}")
         else:
-            # Unfreeze neck, fusion, and head
             param.requires_grad = True
+            print(f"🔥 Trainable: {name}")
     
     # Count trainable parameters
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
