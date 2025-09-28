@@ -95,6 +95,8 @@ def main():
     # Load and preprocess image
     print("Loading and preprocessing image...")
     processed_image, original_image = load_and_preprocess_image(args.image_path, processor)
+    print(f"Processed image shape: {processed_image.shape}")
+    print(f"Processed image range: [{processed_image.min()}, {processed_image.max()}]")
     
     # Load model
     print("Loading trained model...")
@@ -106,12 +108,17 @@ def main():
         # Load default best model
         model, _ = load_saved_model(model)
     
+    print("Model loaded successfully.")
+    test_with_dummy_input(model, device)
     # Run prediction
     print("Running depth prediction...")
     normalized_depth = predict_depth(model, processed_image, device)
+    print(f"Predicted depth shape: {normalized_depth.shape}")
+    print(f"Predicted depth range: [{normalized_depth.min()}, {normalized_depth.max()}]")
     
     # Denormalize to get actual depth values
     depth_map = denormalize_depth(normalized_depth, args.dsm_mean, args.dsm_std)
+    print(f"Denormalized depth range: [{depth_map.min()}, {depth_map.max()}]")
     
     # Display results
     print(f"Depth range: {depth_map.min():.2f}m - {depth_map.max():.2f}m")
@@ -133,6 +140,21 @@ def main():
     depth_image_path = os.path.join(args.output_dir, f'{base_name}_depth.png')
     plt.imsave(depth_image_path, depth_map, cmap='viridis')
     print(f"Depth map image saved to: {depth_image_path}")
+
+def test_with_dummy_input(model, device):
+    """Test model with random input to see if it produces non-zero output"""
+    dummy_input = torch.randn(1, 3, 384, 384).to(device)
+    
+    with torch.no_grad():
+        output = model(pixel_values=dummy_input)
+        
+        if hasattr(output, 'predicted_depth'):
+            test_output = output.predicted_depth
+        else:
+            test_output = output
+            
+        print(f"Dummy test output range: [{test_output.min().item():.6f}, {test_output.max().item():.6f}]")
+        print(f"Dummy test has zeros only: {torch.all(test_output == 0).item()}")
 
 if __name__ == "__main__":
     main()

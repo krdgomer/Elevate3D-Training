@@ -2,7 +2,7 @@
 import torch
 
 class Config:
-    # Data
+    # Data paths (unchanged)
     RGB_DIR = "/content/drive/MyDrive/ProjeDosyalari/anh/train/rgb/"
     DSM_DIR = "/content/drive/MyDrive/ProjeDosyalari/anh/train/dsm/"
     VAL_RGB_DIR = "/content/drive/MyDrive/ProjeDosyalari/anh/val/rgb/"
@@ -11,10 +11,10 @@ class Config:
     # Model
     PRETRAINED_MODEL_NAME = "Intel/dpt-hybrid-midas"
     
-    # Training
+    # Training - UPDATED
     BATCH_SIZE = 4
     NUM_EPOCHS = 25
-    LEARNING_RATE = 1e-4
+    LEARNING_RATE = 2e-4  # Increased for fine-tuning
     WEIGHT_DECAY = 0.01
     
     # Device

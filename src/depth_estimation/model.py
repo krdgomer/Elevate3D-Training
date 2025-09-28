@@ -8,17 +8,28 @@ from src.depth_estimation.config import cfg
 import os
 
 def setup_model(device=cfg.DEVICE):
-    """Initialize the DPT model with pre-trained weights."""
+    """Initialize the DPT model with proper fine-tuning setup."""
     model = DPTForDepthEstimation.from_pretrained(cfg.PRETRAINED_MODEL_NAME)
     
-    # Freeze all layers initially
-    for param in model.parameters():
-        param.requires_grad = False
+    # More strategic freezing - unfreeze decoder and head
+    # Freeze only the backbone (encoder) initially
+    for name, param in model.named_parameters():
+        if "backbone" in name and "layer" in name:
+            # Freeze early layers of backbone
+            layer_num = int(name.split("layer")[1].split(".")[0])
+            if layer_num <= 2:  # Freeze first 2 layers of backbone
+                param.requires_grad = False
+            else:
+                param.requires_grad = True
+        else:
+            # Unfreeze neck, fusion, and head
+            param.requires_grad = True
     
-    # Unfreeze the head for fine-tuning
-    for param in model.head.parameters():
-        param.requires_grad = True
-        
+    # Count trainable parameters
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"🚀 Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
+    
     model = model.to(device)
     return model
 

@@ -11,12 +11,53 @@ from src.depth_estimation.config import cfg
 from src.depth_estimation.dataset import SatelliteDepthDataset
 from src.depth_estimation.model import setup_model, setup_optimizer
 
+def extract_predictions_dpt(outputs):
+    """Correct way to extract predictions from DPT model"""
+    # DPTForDepthEstimation returns DPTDepthEstimationOutput object
+    # The predicted depth map is in outputs.predicted_depth
+    if hasattr(outputs, 'predicted_depth'):
+        return outputs.predicted_depth
+    elif isinstance(outputs, dict) and 'predicted_depth' in outputs:
+        return outputs['predicted_depth']
+    else:
+        # Fallback: try to access the raw output
+        return outputs
+
 def save_checkpoint(state, filename="checkpoint.pth"):
     """Save training checkpoint."""
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
     path = os.path.join(cfg.OUTPUT_DIR, filename)
     torch.save(state, path)
 
+def validate_model_before_training(model, train_loader, device):
+    """Validate that model can learn before full training"""
+    print("🧪 Running pre-training validation...")
+    
+    model.train()
+    criterion = torch.nn.MSELoss()
+    
+    # Get one batch
+    rgb_batch, dsm_batch = next(iter(train_loader))
+    rgb_batch = rgb_batch.to(device)
+    dsm_batch = dsm_batch.to(device)
+    
+    # Test forward pass
+    with torch.no_grad():
+        outputs = model(pixel_values=rgb_batch)
+        predictions = extract_predictions_dpt(outputs)
+        
+        if len(predictions.shape) == 3:
+            predictions = predictions.unsqueeze(1)
+        
+        print(f"Pre-train predictions range: [{predictions.min().item():.6f}, {predictions.max().item():.6f}]")
+        
+        if torch.all(predictions == 0):
+            print("❌ CRITICAL: Model produces all zeros! Check architecture.")
+            return False
+        else:
+            print("✅ Model produces non-zero outputs - ready for training")
+            return True
+        
 def train_epoch(model, train_loader, criterion, optimizer, device):
     model.train()
     epoch_loss = 0.0
@@ -26,48 +67,27 @@ def train_epoch(model, train_loader, criterion, optimizer, device):
         rgb_batch = rgb_batch.to(device)
         dsm_batch = dsm_batch.to(device)
         
-        # Debug first batch shapes
+        # Debug first batch
         if batch_idx == 0:
-            print(f"Input RGB batch shape: {rgb_batch.shape}")  # Should be [B, 3, 384, 384]
-            print(f"Target DSM batch shape: {dsm_batch.shape}")  # Should be [B, 1, 384, 384]
+            print(f"Input RGB batch shape: {rgb_batch.shape}")
+            print(f"Target DSM batch shape: {dsm_batch.shape}")
         
         optimizer.zero_grad()
         
-        # Forward pass
+        # Forward pass - FIXED: Use correct output extraction
         outputs = model(pixel_values=rgb_batch)
-        
-        # Extract predictions from model output
-        if hasattr(outputs, 'predicted_depth'):
-            predictions = outputs.predicted_depth
-        elif hasattr(outputs, 'prediction'):
-            predictions = outputs.prediction
-        elif hasattr(outputs, 'last_hidden_state'):
-            predictions = outputs.last_hidden_state
-        elif isinstance(outputs, dict):
-            # Try different possible keys
-            predictions = outputs.get('predicted_depth', 
-                         outputs.get('prediction', 
-                         outputs.get('logits', 
-                         outputs.get('last_hidden_state'))))
-        else:
-            predictions = outputs
+        predictions = extract_predictions_dpt(outputs)
         
         if batch_idx == 0:
             print(f"Raw predictions shape: {predictions.shape}")
+            print(f"Raw predictions range: [{predictions.min().item():.4f}, {predictions.max().item():.4f}]")
         
-        # Ensure predictions have the right shape [B, 1, H, W]
+        # Ensure predictions have the right shape [B, H, W] -> [B, 1, H, W]
         if len(predictions.shape) == 3:
-            # [B, H, W] -> [B, 1, H, W]
             predictions = predictions.unsqueeze(1)
-        elif len(predictions.shape) == 4 and predictions.shape[1] != 1:
-            # If it has multiple channels, average them or take the first
-            if predictions.shape[1] > 1:
-                predictions = predictions.mean(dim=1, keepdim=True)
         
         # Resize predictions to match target size if needed
         if predictions.shape[-2:] != dsm_batch.shape[-2:]:
-            if batch_idx == 0:
-                print(f"Resizing predictions from {predictions.shape[-2:]} to {dsm_batch.shape[-2:]}")
             predictions = F.interpolate(
                 predictions, 
                 size=dsm_batch.shape[-2:], 
@@ -77,7 +97,7 @@ def train_epoch(model, train_loader, criterion, optimizer, device):
         
         if batch_idx == 0:
             print(f"Final predictions shape: {predictions.shape}")
-            print(f"Final targets shape: {dsm_batch.shape}")
+            print(f"Final predictions range: [{predictions.min().item():.4f}, {predictions.max().item():.4f}]")
             print("-" * 50)
         
         # Calculate loss
@@ -88,7 +108,6 @@ def train_epoch(model, train_loader, criterion, optimizer, device):
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         
-        # Update metrics
         epoch_loss += loss.item() * rgb_batch.size(0)
         pbar.set_postfix({'loss': f'{loss.item():.4f}'})
     
@@ -100,36 +119,28 @@ def validate_epoch(model, val_loader, criterion, device):
     
     with torch.no_grad():
         pbar = tqdm(val_loader, desc="Validation")
-        for rgb_batch, dsm_batch in pbar:
+        for batch_idx, (rgb_batch, dsm_batch) in pbar:
             rgb_batch = rgb_batch.to(device)
             dsm_batch = dsm_batch.to(device)
             
-            # Forward pass
+            # Debug first batch
+            if batch_idx == 0:
+                print(f"Val Input RGB shape: {rgb_batch.shape}")
+                print(f"Val Target DSM shape: {dsm_batch.shape}")
+            
+            # Forward pass - FIXED: Use correct output extraction
             outputs = model(pixel_values=rgb_batch)
+            predictions = extract_predictions_dpt(outputs)
             
-            # Extract predictions
-            if hasattr(outputs, 'predicted_depth'):
-                predictions = outputs.predicted_depth
-            elif hasattr(outputs, 'prediction'):
-                predictions = outputs.prediction
-            elif hasattr(outputs, 'last_hidden_state'):
-                predictions = outputs.last_hidden_state
-            elif isinstance(outputs, dict):
-                predictions = outputs.get('predicted_depth', 
-                             outputs.get('prediction', 
-                             outputs.get('logits', 
-                             outputs.get('last_hidden_state'))))
-            else:
-                predictions = outputs
+            if batch_idx == 0:
+                print(f"Val Raw predictions shape: {predictions.shape}")
+                print(f"Val Raw predictions range: [{predictions.min().item():.4f}, {predictions.max().item():.4f}]")
             
-            # Ensure correct shape
+            # Ensure predictions have the right shape [B, H, W] -> [B, 1, H, W]
             if len(predictions.shape) == 3:
                 predictions = predictions.unsqueeze(1)
-            elif len(predictions.shape) == 4 and predictions.shape[1] != 1:
-                if predictions.shape[1] > 1:
-                    predictions = predictions.mean(dim=1, keepdim=True)
             
-            # Resize if needed
+            # Resize predictions to match target size if needed
             if predictions.shape[-2:] != dsm_batch.shape[-2:]:
                 predictions = F.interpolate(
                     predictions, 
@@ -138,9 +149,14 @@ def validate_epoch(model, val_loader, criterion, device):
                     align_corners=False
                 )
             
+            if batch_idx == 0:
+                print(f"Val Final predictions shape: {predictions.shape}")
+                print(f"Val Final predictions range: [{predictions.min().item():.4f}, {predictions.max().item():.4f}]")
+                print("-" * 50)
+            
             loss = criterion(predictions, dsm_batch)
             epoch_loss += loss.item() * rgb_batch.size(0)
-            pbar.set_postfix({'loss': f'{loss.item():.4f}'})
+            pbar.set_postfix({'val_loss': f'{loss.item():.4f}'})
     
     return epoch_loss / len(val_loader.dataset)
 
@@ -218,7 +234,9 @@ def main():
     print(f"Training on device: {cfg.DEVICE}")
     
     best_val_loss = float('inf')
-    
+    if not validate_model_before_training(model, train_loader, cfg.DEVICE):
+        print("Stopping training due to model issues")
+        return
     # Training loop
     print(f"\nStarting training for {cfg.NUM_EPOCHS} epochs...")
     for epoch in range(cfg.NUM_EPOCHS):
