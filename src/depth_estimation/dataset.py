@@ -92,7 +92,8 @@ class SatelliteDepthDataset(Dataset):
         
         print(f"📊 DSM Statistics - Mean: {mean:.2f}m, Std: {std:.2f}m, Range: ~{mean-2*std:.1f} to {mean+2*std:.1f}m")
         return float(mean), float(std)
-    
+    def __len__(self):
+        return len(self.matching_numbers)
     def __getitem__(self, idx):
         num = self.matching_numbers[idx]
         rgb_path = os.path.join(self.rgb_dir, f"rgb_{num}.png")
