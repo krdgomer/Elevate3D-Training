@@ -119,7 +119,7 @@ def validate_epoch(model, val_loader, criterion, device):
     
     with torch.no_grad():
         pbar = tqdm(val_loader, desc="Validation")
-        for batch_idx, (rgb_batch, dsm_batch) in pbar:
+        for batch_idx, (rgb_batch, dsm_batch) in enumerate(pbar):
             rgb_batch = rgb_batch.to(device)
             dsm_batch = dsm_batch.to(device)
             
