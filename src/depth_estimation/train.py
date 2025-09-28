@@ -213,14 +213,14 @@ def main():
         train_dataset, 
         batch_size=cfg.BATCH_SIZE, 
         shuffle=True, 
-        num_workers=2,  # Adjust based on your system
+        num_workers=8,  # Adjust based on your system
         pin_memory=True if cfg.DEVICE.startswith('cuda') else False
     )
     val_loader = DataLoader(
         val_dataset, 
         batch_size=cfg.BATCH_SIZE, 
         shuffle=False, 
-        num_workers=2,
+        num_workers=4,
         pin_memory=True if cfg.DEVICE.startswith('cuda') else False
     )
     
