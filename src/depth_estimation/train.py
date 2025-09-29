@@ -66,8 +66,7 @@ class DepthEstimationTrainer:
             depth_maps = depth_maps.to(self.device)
             
             # Prepare inputs
-            images_uint8 = (images * 255).byte()
-            inputs = self.image_processor(images_uint8, return_tensors="pt")
+            inputs = self.image_processor(images, return_tensors="pt")
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
                 
             # Forward pass
@@ -114,8 +113,7 @@ class DepthEstimationTrainer:
                 images = images.to(self.device)
                 depth_maps = depth_maps.to(self.device)
                 
-                images_uint8 = (images * 255).byte()
-                inputs = self.image_processor(images_uint8, return_tensors="pt")
+                inputs = self.image_processor(images, return_tensors="pt")
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
                 
                 outputs = self.model(**inputs)

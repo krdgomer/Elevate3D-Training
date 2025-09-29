@@ -67,18 +67,16 @@ def get_transforms(image_size=384):
         A.Resize(height=image_size, width=image_size),
         A.HorizontalFlip(p=0.5),
         A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=0.5),
-        A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-        ToTensorV2(),
+        ToTensorV2(),  # Converts to [0, 1] range
     ], additional_targets={'mask': 'image'})
     
     val_transform = A.Compose([
         A.Resize(height=image_size, width=image_size),
-        A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-        ToTensorV2(),
+        ToTensorV2(),  # Converts to [0, 1] range
     ], additional_targets={'mask': 'image'})
     
     return train_transform, val_transform
-    
+
 
 
 
