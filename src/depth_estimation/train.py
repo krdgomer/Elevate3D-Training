@@ -214,10 +214,10 @@ def main():
     
     # Create dataloaders
     train_loader = DataLoader(
-        train_dataset, batch_size=8, shuffle=True, num_workers=4
+        train_dataset, batch_size=4, shuffle=True, num_workers=2
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=8, shuffle=False, num_workers=4
+        val_dataset, batch_size=4, shuffle=False, num_workers=2
     )
     
     # Initialize trainer
