@@ -205,10 +205,10 @@ def main():
     
     # Create datasets
     train_dataset = SatelliteDepthDataset(
-        train_image_dir, train_depth_dir, transform=train_transform, is_train=True
+        train_image_dir, train_depth_dir, transform=train_transform
     )
     val_dataset = SatelliteDepthDataset(
-        val_image_dir, val_depth_dir, transform=val_transform, is_train=False
+        val_image_dir, val_depth_dir, transform=val_transform
     )
     
     # Create dataloaders
