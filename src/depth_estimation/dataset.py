@@ -1,149 +1,85 @@
-# dataset.py
-
 import torch
 from torch.utils.data import Dataset
-from transformers import DPTImageProcessor
-from PIL import Image
+import cv2
 import numpy as np
 import os
-from src.depth_estimation.config import cfg
-from torchvision import transforms
-import gc
-
-processor = DPTImageProcessor.from_pretrained(cfg.PRETRAINED_MODEL_NAME)
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
 class SatelliteDepthDataset(Dataset):
-    def __init__(self, rgb_dir, dsm_dir, transform=None, normalize_dsm=True, 
-                 batch_size_for_stats=100, resize_to_model_input=True):
-        self.rgb_dir = rgb_dir
-        self.dsm_dir = dsm_dir
+    def __init__(self, image_dir, depth_dir, transform=None, image_size=512):
+        self.image_dir = image_dir
+        self.depth_dir = depth_dir
         self.transform = transform
-        self.resize_to_model_input = resize_to_model_input
+        self.image_size = image_size
         
-        # Get matching filenames
-        rgb_files = [f for f in os.listdir(rgb_dir) if f.startswith("rgb_") and f.endswith(".png")]
-        dsm_files = [f for f in os.listdir(dsm_dir) if f.startswith("dsm_") and f.endswith(".png")]
+        self.image_files = sorted([f for f in os.listdir(image_dir) 
+                                 if f.endswith(('.jpg', '.jpeg', '.png'))])
         
-        rgb_numbers = set(f.split("_")[1].split(".")[0] for f in rgb_files)
-        dsm_numbers = set(f.split("_")[1].split(".")[0] for f in dsm_files)
-        
-        self.matching_numbers = sorted(rgb_numbers.intersection(dsm_numbers))
-        print(f"Found {len(self.matching_numbers)} matching RGB-DSM pairs")
-        
-        if normalize_dsm:
-            self.dsm_mean, self.dsm_std = self._calculate_dsm_stats_efficient(batch_size_for_stats)
-        else:
-            self.dsm_mean, self.dsm_std = 0, 1
-        
-    def _calculate_dsm_stats_efficient(self, batch_size=100):
-        """Calculate DSM statistics with proper 8-bit PNG handling"""
-        from tqdm import tqdm
-        
-        print("Calculating DSM statistics for 8-bit PNG files...")
-        
-        total_sum = 0.0
-        total_sum_squared = 0.0
-        total_count = 0
-        
-        # Process files in batches
-        for i in tqdm(range(0, len(self.matching_numbers), batch_size), desc="Processing DSM batches"):
-            batch_numbers = self.matching_numbers[i:i + batch_size]
-            batch_values = []
-            
-            for num in batch_numbers:
-                try:
-                    dsm_path = os.path.join(self.dsm_dir, f"dsm_{num}.png")
-                    dsm_image = Image.open(dsm_path)
-                    dsm_data = np.array(dsm_image, dtype=np.float32)
-                    
-                    # IMPORTANT: 8-bit PNG values are 0-255, scale to meaningful range
-                    # Assuming 0-255 represents 0-50 meters (adjust based on your data)
-                    MAX_DEPTH = 50.0  # Maximum depth in meters
-                    dsm_data = (dsm_data / 255.0) * MAX_DEPTH
-                    
-                    # Only consider non-zero values
-                    valid_mask = dsm_data > 0.1  # Small threshold to avoid noise
-                    if np.any(valid_mask):
-                        valid_data = dsm_data[valid_mask]
-                        batch_values.extend(valid_data.flatten())
-                    
-                    dsm_image.close()
-                    del dsm_data, valid_mask
-                    
-                except Exception as e:
-                    print(f"Error processing {dsm_path}: {e}")
-                    continue
-            
-            if batch_values:
-                batch_array = np.array(batch_values, dtype=np.float64)
-                total_sum += np.sum(batch_array)
-                total_sum_squared += np.sum(batch_array ** 2)
-                total_count += len(batch_array)
-                
-                del batch_values, batch_array
-                gc.collect()
-        
-        if total_count == 0:
-            raise ValueError("No valid DSM data found!")
-        
-        mean = total_sum / total_count
-        variance = (total_sum_squared / total_count) - (mean ** 2)
-        std = np.sqrt(max(variance, 0))
-        
-        print(f"📊 DSM Statistics - Mean: {mean:.2f}m, Std: {std:.2f}m, Range: ~{mean-2*std:.1f} to {mean+2*std:.1f}m")
-        return float(mean), float(std)
     def __len__(self):
-        return len(self.matching_numbers)
+        return len(self.image_files)
+    
     def __getitem__(self, idx):
-        num = self.matching_numbers[idx]
-        rgb_path = os.path.join(self.rgb_dir, f"rgb_{num}.png")
-        dsm_path = os.path.join(self.dsm_dir, f"dsm_{num}.png")
+        # Load RGB image
+        image_name = self.image_files[idx]
+        image_path = os.path.join(self.image_dir, image_name)
         
-        try:
-            # Load RGB
-            rgb_image = Image.open(rgb_path).convert('RGB')
-            
-            # Load DSM and convert from 8-bit to depth values
-            dsm_image = Image.open(dsm_path)
-            if dsm_image.mode != 'L':
-                dsm_image = dsm_image.convert('L')
-            
-            dsm_data = np.array(dsm_image, dtype=np.float32)
-            
-            # Convert 8-bit to depth values (same scaling as in stats calculation)
-            MAX_DEPTH = 50.0
-            dsm_data = (dsm_data / 255.0) * MAX_DEPTH
-            
-            # Process RGB with HF processor
-            if self.transform:
-                if self.resize_to_model_input:
-                    rgb_image = rgb_image.resize((384, 384), Image.LANCZOS)
-                rgb_tensor = self.transform(rgb_image)
-            else:
-                processed = processor(rgb_image, return_tensors="pt")
-                rgb_tensor = processed["pixel_values"].squeeze(0)
-            
-            # Process DSM
-            if self.resize_to_model_input:
-                dsm_pil = Image.fromarray(dsm_data.astype(np.float32))
-                dsm_pil = dsm_pil.resize((384, 384), Image.LANCZOS)
-                dsm_data = np.array(dsm_pil, dtype=np.float32)
-                dsm_pil.close()
-            
-            # Normalize DSM
-            dsm_data = (dsm_data - self.dsm_mean) / self.dsm_std
-            
-            # Convert to tensor
-            dsm_tensor = torch.FloatTensor(dsm_data).unsqueeze(0)
-            
-            rgb_image.close()
-            dsm_image.close()
-            
-            return rgb_tensor, dsm_tensor
-            
-        except Exception as e:
-            print(f"Error loading sample {idx} (num={num}): {e}")
-            # Return proper shapes
-            dummy_rgb = torch.randn(3, 384, 384) * 0.1  # Small random values instead of zeros
-            dummy_dsm = torch.randn(1, 384, 384) * 0.1
-            return dummy_rgb, dummy_dsm
+        # Get corresponding depth map name
+        number = image_name.replace('rgb_', '').replace('.png', '')
+        depth_name = f'dsm_{number}.png'
+        depth_path = os.path.join(self.depth_dir, depth_name)
+        
+        # Read image (3 channels)
+        image = cv2.imread(image_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        # Read depth map (4 channels RGBA)
+        depth_rgba = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
+        
+        # Extract depth from alpha channel (4th channel)
+        if len(depth_rgba.shape) == 3 and depth_rgba.shape[2] == 4:
+            depth = depth_rgba[:, :, 3]  # Alpha channel
+        else:
+            depth = depth_rgba  # Already single channel
+        
+        # Resize if needed
+        if image.shape[:2] != (self.image_size, self.image_size):
+            image = cv2.resize(image, (self.image_size, self.image_size))
+            depth = cv2.resize(depth, (self.image_size, self.image_size))
+        
+        # Normalize depth to [0, 1]
+        depth = depth.astype(np.float32) / 255.0
+        
+        # Apply transforms
+        if self.transform:
+            transformed = self.transform(image=image, mask=depth)
+            image = transformed['image']
+            depth = transformed['mask']
+        else:
+            # Convert to tensors
+            image = torch.from_numpy(image).permute(2, 0, 1).float() / 255.0
+            depth = torch.from_numpy(depth).unsqueeze(0).float()
+        
+        return image, depth
+    
+def get_transforms(image_size=384):
+    train_transform = A.Compose([
+        A.Resize(height=image_size, width=image_size),
+        A.HorizontalFlip(p=0.5),
+        A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=0.5),
+        A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ToTensorV2(),
+    ], additional_targets={'mask': 'image'})
+    
+    val_transform = A.Compose([
+        A.Resize(height=image_size, width=image_size),
+        A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ToTensorV2(),
+    ], additional_targets={'mask': 'image'})
+    
+    return train_transform, val_transform
+    
+
+
+
+

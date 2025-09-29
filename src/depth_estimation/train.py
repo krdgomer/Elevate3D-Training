@@ -1,291 +1,234 @@
-# train.py
-
 import torch
-import torch.nn.functional as F
+import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from transformers import DPTForDepthEstimation, DPTImageProcessor
+from src.depth_estimation.dataset import SatelliteDepthDataset,get_transforms
+import torch.optim as optim
 from tqdm import tqdm
-import os
+import matplotlib.pyplot as plt
 
-from src.depth_estimation.config import cfg
-from src.depth_estimation.dataset import SatelliteDepthDataset
-from src.depth_estimation.model import setup_model, setup_optimizer
+class GradientLoss(nn.Module):
+    def __init__(self):
+        super(GradientLoss, self).__init__()
 
-def extract_predictions_dpt(outputs):
-    """Correct way to extract predictions from DPT model"""
-    # DPTForDepthEstimation returns DPTDepthEstimationOutput object
-    # The predicted depth map is in outputs.predicted_depth
-    if hasattr(outputs, 'predicted_depth'):
-        return outputs.predicted_depth
-    elif isinstance(outputs, dict) and 'predicted_depth' in outputs:
-        return outputs['predicted_depth']
-    else:
-        # Fallback: try to access the raw output
-        return outputs
+    def forward(self, pred, target):
+        grad_x_pred = pred[:, :, :, 1:] - pred[:, :, :, :-1]
+        grad_y_pred = pred[:, :, 1:, :] - pred[:, :, :-1, :]
 
-def save_checkpoint(state, filename="checkpoint.pth"):
-    """Save training checkpoint."""
-    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
-    path = os.path.join(cfg.OUTPUT_DIR, filename)
-    torch.save(state, path)
+        grad_x_target = target[:, :, :, 1:] - target[:, :, :, :-1]
+        grad_y_target = target[:, :, 1:, :] - target[:, :, :-1, :]
 
-def validate_model_before_training(model, train_loader, device):
-    """Validate that model can learn before full training"""
-    print("🧪 Running pre-training validation...")
-    
-    model.train()
-    criterion = torch.nn.MSELoss()
-    
-    # Get one batch
-    rgb_batch, dsm_batch = next(iter(train_loader))
-    rgb_batch = rgb_batch.to(device)
-    dsm_batch = dsm_batch.to(device)
-    
-    # Test forward pass
-    with torch.no_grad():
-        outputs = model(pixel_values=rgb_batch)
-        predictions = extract_predictions_dpt(outputs)
-        
-        if len(predictions.shape) == 3:
-            predictions = predictions.unsqueeze(1)
-        
-        print(f"Pre-train predictions range: [{predictions.min().item():.6f}, {predictions.max().item():.6f}]")
-        
-        if torch.all(predictions == 0):
-            print("❌ CRITICAL: Model produces all zeros! Check architecture.")
-            return False
-        else:
-            print("✅ Model produces non-zero outputs - ready for training")
-            return True
-        
-def train_epoch(model, train_loader, criterion, optimizer, device):
-    model.train()
-    epoch_loss = 0.0
-    
-    pbar = tqdm(train_loader, desc="Training")
-    for batch_idx, (rgb_batch, dsm_batch) in enumerate(pbar):
-        rgb_batch = rgb_batch.to(device)
-        dsm_batch = dsm_batch.to(device)
-        
-        # Debug first batch
-        if batch_idx == 0:
-            print(f"Input RGB batch shape: {rgb_batch.shape}")
-            print(f"Target DSM batch shape: {dsm_batch.shape}")
-        
-        optimizer.zero_grad()
-        
-        # Forward pass - FIXED: Use correct output extraction
-        outputs = model(pixel_values=rgb_batch)
-        predictions = extract_predictions_dpt(outputs)
-        
-        if batch_idx == 0:
-            print(f"Raw predictions shape: {predictions.shape}")
-            print(f"Raw predictions range: [{predictions.min().item():.4f}, {predictions.max().item():.4f}]")
-        
-        # Ensure predictions have the right shape [B, H, W] -> [B, 1, H, W]
-        if len(predictions.shape) == 3:
-            predictions = predictions.unsqueeze(1)
-        
-        # Resize predictions to match target size if needed
-        if predictions.shape[-2:] != dsm_batch.shape[-2:]:
-            predictions = F.interpolate(
-                predictions, 
-                size=dsm_batch.shape[-2:], 
-                mode='bilinear', 
-                align_corners=False
-            )
-        
-        if batch_idx == 0:
-            print(f"Final predictions shape: {predictions.shape}")
-            print(f"Final predictions range: [{predictions.min().item():.4f}, {predictions.max().item():.4f}]")
-            print("-" * 50)
-        
-        # Calculate loss
-        loss = criterion(predictions, dsm_batch)
-        
-        # Backward pass
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
-        
-        epoch_loss += loss.item() * rgb_batch.size(0)
-        pbar.set_postfix({'loss': f'{loss.item():.4f}'})
-    
-    return epoch_loss / len(train_loader.dataset)
+        loss_x = torch.abs(grad_x_pred - grad_x_target).mean()
+        loss_y = torch.abs(grad_y_pred - grad_y_target).mean()
 
-def validate_epoch(model, val_loader, criterion, device):
-    model.eval()
-    epoch_loss = 0.0
-    
-    with torch.no_grad():
-        pbar = tqdm(val_loader, desc="Validation")
-        for batch_idx, (rgb_batch, dsm_batch) in enumerate(pbar):
-            rgb_batch = rgb_batch.to(device)
-            dsm_batch = dsm_batch.to(device)
+        return (loss_x + loss_y) / 2
+
+class DepthEstimationTrainer:
+    def __init__(self, model_name="Intel/dpt-large", learning_rate=1e-4):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Load pre-trained model
+        self.model = DPTForDepthEstimation.from_pretrained(model_name)
+        self.model.to(self.device)
+        
+        # Image processor
+        self.image_processor = DPTImageProcessor.from_pretrained(model_name)
+        
+        # Loss function - using a combination of losses
+        self.depth_criterion = nn.SmoothL1Loss()
+        self.gradient_criterion = GradientLoss()
+        
+        # Optimizer
+        self.optimizer = optim.AdamW(self.model.parameters(), lr=learning_rate, weight_decay=1e-2)
+        
+        # Learning rate scheduler
+        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=100)
+        
+    def compute_gradient_loss(self, pred, target):
+        """Compute gradient loss for depth maps"""
+        grad_x_pred = pred[:, :, :, 1:] - pred[:, :, :, :-1]
+        grad_y_pred = pred[:, :, 1:, :] - pred[:, :, :-1, :]
+        
+        grad_x_target = target[:, :, :, 1:] - target[:, :, :, :-1]
+        grad_y_target = target[:, :, 1:, :] - target[:, :, :-1, :]
+        
+        loss_x = torch.abs(grad_x_pred - grad_x_target).mean()
+        loss_y = torch.abs(grad_y_pred - grad_y_target).mean()
+        
+        return (loss_x + loss_y) / 2
+
+    def train_epoch(self, dataloader):
+        self.model.train()
+        total_loss = 0
+        
+        for batch_idx, (images, depth_maps) in enumerate(tqdm(dataloader)):
+            images = images.to(self.device)
+            depth_maps = depth_maps.to(self.device)
             
-            # Debug first batch
-            if batch_idx == 0:
-                print(f"Val Input RGB shape: {rgb_batch.shape}")
-                print(f"Val Target DSM shape: {dsm_batch.shape}")
+            # Prepare inputs
+            inputs = self.image_processor(images, return_tensors="pt")
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
             
-            # Forward pass - FIXED: Use correct output extraction
-            outputs = model(pixel_values=rgb_batch)
-            predictions = extract_predictions_dpt(outputs)
+            # Forward pass
+            self.optimizer.zero_grad()
+            outputs = self.model(**inputs)
+            predicted_depth = outputs.predicted_depth
             
-            if batch_idx == 0:
-                print(f"Val Raw predictions shape: {predictions.shape}")
-                print(f"Val Raw predictions range: [{predictions.min().item():.4f}, {predictions.max().item():.4f}]")
-            
-            # Ensure predictions have the right shape [B, H, W] -> [B, 1, H, W]
-            if len(predictions.shape) == 3:
-                predictions = predictions.unsqueeze(1)
-            
-            # Resize predictions to match target size if needed
-            if predictions.shape[-2:] != dsm_batch.shape[-2:]:
-                predictions = F.interpolate(
-                    predictions, 
-                    size=dsm_batch.shape[-2:], 
-                    mode='bilinear', 
+            # Resize predicted depth to match target
+            if predicted_depth.shape[-2:] != depth_maps.shape[-2:]:
+                predicted_depth = torch.nn.functional.interpolate(
+                    predicted_depth.unsqueeze(1),
+                    size=depth_maps.shape[-2:],
+                    mode='bilinear',
                     align_corners=False
-                )
+                ).squeeze(1)
             
-            if batch_idx == 0:
-                print(f"Val Final predictions shape: {predictions.shape}")
-                print(f"Val Final predictions range: [{predictions.min().item():.4f}, {predictions.max().item():.4f}]")
-                print("-" * 50)
+            # Compute losses
+            depth_loss = self.depth_criterion(predicted_depth, depth_maps.squeeze(1))
+            gradient_loss = self.compute_gradient_loss(
+                predicted_depth.unsqueeze(1), 
+                depth_maps
+            )
             
-            loss = criterion(predictions, dsm_batch)
-            epoch_loss += loss.item() * rgb_batch.size(0)
-            pbar.set_postfix({'val_loss': f'{loss.item():.4f}'})
+            # Combined loss
+            loss = depth_loss + 0.5 * gradient_loss
+            
+            # Backward pass
+            loss.backward()
+            self.optimizer.step()
+            
+            total_loss += loss.item()
+            
+            if batch_idx % 100 == 0:
+                print(f'Batch {batch_idx}, Loss: {loss.item():.4f}')
+        
+        return total_loss / len(dataloader)
     
-    return epoch_loss / len(val_loader.dataset)
-
-def debug_data_loading(dataset, device, num_samples=3):
-    """Debug function to verify data loading works correctly"""
-    print("=" * 60)
-    print("DEBUGGING DATA LOADING FOR 8-BIT PNG FILES")
-    print("=" * 60)
+    def validate(self, dataloader):
+        self.model.eval()
+        total_loss = 0
+        
+        with torch.no_grad():
+            for images, depth_maps in tqdm(dataloader):
+                images = images.to(self.device)
+                depth_maps = depth_maps.to(self.device)
+                
+                inputs = self.image_processor(images, return_tensors="pt")
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                
+                outputs = self.model(**inputs)
+                predicted_depth = outputs.predicted_depth
+                
+                # Resize if needed
+                if predicted_depth.shape[-2:] != depth_maps.shape[-2:]:
+                    predicted_depth = torch.nn.functional.interpolate(
+                        predicted_depth.unsqueeze(1),
+                        size=depth_maps.shape[-2:],
+                        mode='bilinear',
+                        align_corners=False
+                    ).squeeze(1)
+                
+                loss = self.depth_criterion(predicted_depth, depth_maps.squeeze(1))
+                total_loss += loss.item()
+        
+        return total_loss / len(dataloader)
     
-    for i in range(min(num_samples, len(dataset))):
-        rgb, dsm = dataset[i]
-        print(f"Sample {i}:")
-        print(f"  RGB - Shape: {rgb.shape}, dtype: {rgb.dtype}")
-        print(f"  RGB - Range: [{rgb.min():.3f}, {rgb.max():.3f}]")
-        print(f"  DSM - Shape: {dsm.shape}, dtype: {dsm.dtype}")
-        print(f"  DSM - Range: [{dsm.min():.3f}, {dsm.max():.3f}]")
-        print()
+    def train(self, train_loader, val_loader, epochs=50):
+        train_losses = []
+        val_losses = []
+        
+        best_val_loss = float('inf')
+        
+        for epoch in range(epochs):
+            print(f'Epoch {epoch+1}/{epochs}')
+            
+            # Training
+            train_loss = self.train_epoch(train_loader)
+            train_losses.append(train_loss)
+            
+            # Validation
+            val_loss = self.validate(val_loader)
+            val_losses.append(val_loss)
+            
+            # Update scheduler
+            self.scheduler.step()
+            
+            print(f'Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
+            
+            # Save best model
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                self.save_model(f'best_dpt_model.pth')
+                print(f'New best model saved with val_loss: {val_loss:.4f}')
+            
+            # Save checkpoint
+            if (epoch + 1) % 10 == 0:
+                self.save_model(f'checkpoint_epoch_{epoch+1}.pth')
+        
+        # Plot losses
+        self.plot_losses(train_losses, val_losses)
+        
+        return train_losses, val_losses
     
-    # Test DataLoader
-    loader = DataLoader(dataset, batch_size=2, shuffle=False)
-    rgb_batch, dsm_batch = next(iter(loader))
-    print("DataLoader batch test:")
-    print(f"  RGB batch shape: {rgb_batch.shape}")  # Should be [2, 3, 384, 384]
-    print(f"  DSM batch shape: {dsm_batch.shape}")  # Should be [2, 1, 384, 384]
-    print("=" * 60)
+    def save_model(self, path):
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+        }, path)
+    
+    def load_model(self, path):
+        checkpoint = torch.load(path, map_location=self.device)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    
+    def plot_losses(self, train_losses, val_losses):
+        plt.figure(figsize=(10, 5))
+        plt.plot(train_losses, label='Training Loss')
+        plt.plot(val_losses, label='Validation Loss')
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.title('Training and Validation Losses')
+        plt.savefig('training_losses.png')
+        plt.close()
 
 def main():
-    print("Setting up datasets for 8-bit PNG files (512x512 -> 384x384)...")
+    # Dataset paths
+
+    train_image_dir = "/content/drive/MyDrive/ProjeDosyalari/anh/train/rgb/"
+    train_depth_dir = "/content/drive/MyDrive/ProjeDosyalari/anh/train/dsm/"
+    val_image_dir = "/content/drive/MyDrive/ProjeDosyalari/anh/val/rgb/"
+    val_depth_dir = "/content/drive/MyDrive/ProjeDosyalari/anh/val/dsm/"
     
-    # Setup datasets with caching to avoid recomputing stats
+    # Get transforms
+    train_transform, val_transform = get_transforms(image_size=384)
+    
+    # Create datasets
     train_dataset = SatelliteDepthDataset(
-        rgb_dir=cfg.RGB_DIR, 
-        dsm_dir=cfg.DSM_DIR,
-        batch_size_for_stats=50,
-        resize_to_model_input=True  # This handles 512x512 -> 384x384 resize
+        train_image_dir, train_depth_dir, transform=train_transform, is_train=True
     )
-    
     val_dataset = SatelliteDepthDataset(
-        rgb_dir=cfg.VAL_RGB_DIR, 
-        dsm_dir=cfg.VAL_DSM_DIR,
-        batch_size_for_stats=50,
-        resize_to_model_input=True
+        val_image_dir, val_depth_dir, transform=val_transform, is_train=False
     )
     
-    print(f"Training dataset size: {len(train_dataset)}")
-    print(f"Validation dataset size: {len(val_dataset)}")
-    
-    # Debug data loading
-    print("\nDebugging training dataset...")
-    debug_data_loading(train_dataset, cfg.DEVICE)
-    
-    # Setup data loaders
+    # Create dataloaders
     train_loader = DataLoader(
-        train_dataset, 
-        batch_size=cfg.BATCH_SIZE, 
-        shuffle=True, 
-        num_workers=8,  # Adjust based on your system
-        pin_memory=True if cfg.DEVICE.startswith('cuda') else False
+        train_dataset, batch_size=8, shuffle=True, num_workers=4
     )
     val_loader = DataLoader(
-        val_dataset, 
-        batch_size=cfg.BATCH_SIZE, 
-        shuffle=False, 
-        num_workers=4,
-        pin_memory=True if cfg.DEVICE.startswith('cuda') else False
+        val_dataset, batch_size=8, shuffle=False, num_workers=4
     )
     
-    # Setup model and training components
-    model = setup_model()
-    optimizer = setup_optimizer(model)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
-    criterion = torch.nn.HuberLoss(delta=0.5)
+    # Initialize trainer
+    trainer = DepthEstimationTrainer(
+        model_name="Intel/dpt-large",  # or "Intel/dpt-hybrid-midas"
+        learning_rate=1e-4
+    )
     
-    print(f"Model device: {next(model.parameters()).device}")
-    print(f"Training on device: {cfg.DEVICE}")
-    
-    best_val_loss = float('inf')
-    if not validate_model_before_training(model, train_loader, cfg.DEVICE):
-        print("Stopping training due to model issues")
-        return
-    # Training loop
-    print(f"\nStarting training for {cfg.NUM_EPOCHS} epochs...")
-    for epoch in range(cfg.NUM_EPOCHS):
-        print(f"\nEpoch {epoch+1}/{cfg.NUM_EPOCHS}")
-        print("-" * 50)
-        
-        # Train
-        train_loss = train_epoch(model, train_loader, criterion, optimizer, cfg.DEVICE)
-        
-        # Validate
-        val_loss = validate_epoch(model, val_loader, criterion, cfg.DEVICE)
-        
-        # Update scheduler
-        scheduler.step(val_loss)
-        
-        print(f'Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f}')
-        print(f'Current LR: {optimizer.param_groups[0]["lr"]:.2e}')
-        
-        # Save best model
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            save_checkpoint({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict(),
-                'train_loss': train_loss,
-                'val_loss': val_loss,
-                'dsm_stats': {
-                    'train_mean': train_dataset.dsm_mean,
-                    'train_std': train_dataset.dsm_std,
-                    'val_mean': val_dataset.dsm_mean,
-                    'val_std': val_dataset.dsm_std
-                }
-            }, filename=cfg.BEST_MODEL_NAME)
-            print(f'✓ Saved new best model with val loss: {val_loss:.6f}')
-        
-        # Save regular checkpoint
-        if (epoch + 1) % 5 == 0:  # Save every 5 epochs
-            save_checkpoint({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict(),
-                'train_loss': train_loss,
-                'val_loss': val_loss,
-            }, filename=f"checkpoint_epoch_{epoch+1}.pth")
-    
-    print(f"\nTraining completed! Best validation loss: {best_val_loss:.6f}")
+    # Start training
+    train_losses, val_losses = trainer.train(
+        train_loader, val_loader, epochs=50
+    )
 
 if __name__ == "__main__":
     main()
